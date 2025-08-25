@@ -1,538 +1,494 @@
 “””
-Prime Movement Controller System - Refactored
+Nusantara Maritime Movement System
 
-A high-performance, state-based movement system with specialized controllers
-for managing entity movement through different states with comprehensive
-statistical tracking and performance monitoring.
+A distributed archipelagic movement system based on maritime Southeast Asian
+navigation patterns, monsoon cycles, and inter-island synchronization networks.
 “””
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Dict, List, Optional, Tuple, Protocol
-import logging
+from typing import Dict, List, Set, Optional, Tuple, Union
+import math
+import random
+from datetime import datetime, timedelta
 
-class MovementState(Enum):
-“”“Enumeration of possible movement states with explicit values.”””
-EXPLORING = auto()
-TRANSITIONING = auto()
-LOCKED = auto()
-ANOMALOUS = auto()
-SYNCHRONIZED = auto()
+class MonsoonPhase(Enum):
+“”“Monsoon cycle phases affecting inter-island movement.”””
+NORTHEAST_MONSOON = “northeast”  # Oct-Mar
+SOUTHWEST_MONSOON = “southwest”  # Apr-Sep
+TRANSITION_PERIOD = “transition”  # Brief periods between monsoons
 
-class Specialization(Enum):
-“”“Enumeration of specialization types with performance characteristics.”””
-TERRITORIAL = auto()
-ECONOMIC = auto()
-SOCIAL = auto()
-TECHNOLOGICAL = auto()
+class IslandSpecialization(Enum):
+“”“Island specialization types in the Nusantara network.”””
+MARITIME_HUB = “maritime_hub”      # Strategic ports, navigation centers
+SPICE_PRODUCER = “spice_producer”  # Agricultural/resource islands
+CULTURAL_NODE = “cultural_node”    # Religious, educational centers
+TECH_ENTREPOT = “tech_entrepot”    # Trade technology, innovation hubs
 
-@dataclass(frozen=True)
-class MovementResult:
-“”“Immutable result object representing the outcome of a movement operation.”””
-success: bool = False
-stat_changes: Dict[str, int] = field(default_factory=dict)
-performance_impact: int = 0
-world_modifications: List[str] = field(default_factory=list)
-narrative_events: List[str] = field(default_factory=list)
-
-```
-def __post_init__(self):
-    # Ensure immutable collections
-    object.__setattr__(self, 'stat_changes', dict(self.stat_changes))
-    object.__setattr__(self, 'world_modifications', list(self.world_modifications))
-    object.__setattr__(self, 'narrative_events', list(self.narrative_events))
-```
+class NetworkState(Enum):
+“”“Network-wide synchronization states.”””
+FRAGMENTED = auto()    # Islands operating independently
+CONNECTING = auto()    # Establishing inter-island links
+SYNCHRONIZED = auto()  # Full network coherence
+DISRUPTED = auto()     # External interference/natural disasters
+TRANSCENDENT = auto()  # Beyond normal operational parameters
 
 @dataclass(frozen=True)
-class MovementOptions:
-“”“Immutable data class representing available movement paths.”””
-paths: List[str] = field(default_factory=list)
+class NavigationResult:
+“”“Result of inter-island navigation attempt.”””
+success: bool
+origin_island: str
+destination_island: str
+route_taken: str
+monsoon_favorable: bool
+cultural_exchange: Dict[str, int] = field(default_factory=dict)
+trade_volume: int = 0
+knowledge_transferred: List[str] = field(default_factory=list)
+network_effects: List[str] = field(default_factory=list)
+
+@dataclass(frozen=True)
+class IslandState:
+“”“Current state of an individual island node.”””
+name: str
+specialization: IslandSpecialization
+autonomy_level: float  # 0.0 to 1.0
+network_connectivity: float  # 0.0 to 1.0
+cultural_resonance: Dict[str, float] = field(default_factory=dict)
+resource_capacity: int = 100
+innovation_index: float = 0.0
+
+class MonsoonCalculator:
+“”“Handles monsoon cycle calculations and navigation favorability.”””
 
 ```
-def __post_init__(self):
-    object.__setattr__(self, 'paths', list(self.paths))
-```
+def __init__(self, current_phase: MonsoonPhase = MonsoonPhase.NORTHEAST_MONSOON):
+    self.current_phase = current_phase
+    self._phase_duration = 180  # days per phase
+    self._day_counter = 0
 
-class StateTransitionError(Exception):
-“”“Raised when an invalid state transition is attempted.”””
-pass
+def advance_cycle(self, days: int = 1) -> None:
+    """Advance the monsoon cycle."""
+    self._day_counter += days
+    if self._day_counter >= self._phase_duration:
+        self._day_counter = 0
+        self._transition_phase()
 
-class PerformanceCalculator:
-“”“Handles performance calculations and thresholds.”””
+def _transition_phase(self) -> None:
+    """Transition to next monsoon phase."""
+    transitions = {
+        MonsoonPhase.NORTHEAST_MONSOON: MonsoonPhase.TRANSITION_PERIOD,
+        MonsoonPhase.TRANSITION_PERIOD: MonsoonPhase.SOUTHWEST_MONSOON,
+        MonsoonPhase.SOUTHWEST_MONSOON: MonsoonPhase.TRANSITION_PERIOD,
+    }
+    self.current_phase = transitions.get(self.current_phase, MonsoonPhase.NORTHEAST_MONSOON)
 
-```
-# Class constants for better maintainability
-ANOMALY_THRESHOLD = 5
-SYNCHRONIZATION_THRESHOLD = 90
-
-PERFORMANCE_INCREMENTS = {
-    Specialization.TERRITORIAL: 5,
-    Specialization.ECONOMIC: 3,
-    Specialization.SOCIAL: 4,
-    Specialization.TECHNOLOGICAL: 6
-}
-
-@classmethod
-def get_performance_increment(cls, specialization: Specialization) -> int:
-    """Get performance increment for a given specialization."""
-    return cls.PERFORMANCE_INCREMENTS[specialization]
-
-@classmethod
-def should_transition_to_anomalous(cls, anomaly_count: int) -> bool:
-    """Determine if system should transition to anomalous state."""
-    return anomaly_count > cls.ANOMALY_THRESHOLD
-
-@classmethod
-def should_transition_to_synchronized(cls, performance: int) -> bool:
-    """Determine if system should transition to synchronized state."""
-    return performance > cls.SYNCHRONIZATION_THRESHOLD
-```
-
-class StateManager:
-“”“Manages state transitions with validation.”””
-
-```
-# Valid state transitions mapping
-VALID_TRANSITIONS = {
-    MovementState.EXPLORING: {MovementState.TRANSITIONING, MovementState.LOCKED, 
-                             MovementState.ANOMALOUS, MovementState.SYNCHRONIZED},
-    MovementState.TRANSITIONING: {MovementState.EXPLORING, MovementState.LOCKED, 
-                                MovementState.ANOMALOUS, MovementState.SYNCHRONIZED},
-    MovementState.LOCKED: {MovementState.EXPLORING, MovementState.TRANSITIONING,
-                          MovementState.ANOMALOUS},
-    MovementState.ANOMALOUS: set(),  # Terminal state
-    MovementState.SYNCHRONIZED: set()  # Terminal state
-}
-
-def __init__(self, initial_state: MovementState = MovementState.EXPLORING):
-    self._current_state = initial_state
-    self._state_history: List[MovementState] = [initial_state]
-
-@property
-def current_state(self) -> MovementState:
-    """Get current state."""
-    return self._current_state
-
-@property
-def state_history(self) -> List[MovementState]:
-    """Get immutable copy of state history."""
-    return self._state_history.copy()
-
-def can_transition_to(self, new_state: MovementState) -> bool:
-    """Check if transition to new state is valid."""
-    return new_state in self.VALID_TRANSITIONS.get(self._current_state, set())
-
-def transition_to(self, new_state: MovementState) -> None:
-    """Transition to new state with validation."""
-    if not self.can_transition_to(new_state):
-        raise StateTransitionError(
-            f"Invalid transition from {self._current_state} to {new_state}"
-        )
+def is_navigation_favorable(self, origin: str, destination: str) -> Tuple[bool, float]:
+    """Determine if current monsoon favors navigation between islands."""
+    # Simplified model: certain routes favored by certain monsoons
+    route_favorability = {
+        MonsoonPhase.NORTHEAST_MONSOON: {
+            ("java", "sumatra"): 0.8,
+            ("borneo", "sulawesi"): 0.9,
+            ("mindanao", "visayas"): 0.7,
+        },
+        MonsoonPhase.SOUTHWEST_MONSOON: {
+            ("sumatra", "java"): 0.8,
+            ("sulawesi", "borneo"): 0.9,
+            ("visayas", "mindanao"): 0.7,
+        },
+        MonsoonPhase.TRANSITION_PERIOD: {}  # No particular favorability
+    }
     
-    self._current_state = new_state
-    self._state_history.append(new_state)
-
-def reset(self) -> None:
-    """Reset to initial state."""
-    self._current_state = MovementState.EXPLORING
-    self._state_history = [MovementState.EXPLORING]
+    route_key = (origin.lower(), destination.lower())
+    reverse_key = (destination.lower(), origin.lower())
+    
+    favorability = route_favorability.get(self.current_phase, {})
+    factor = favorability.get(route_key, favorability.get(reverse_key, 0.5))
+    
+    return factor > 0.6, factor
 ```
 
-class StatisticsTracker:
-“”“Handles statistics tracking and reporting.”””
+class NetworkSyncCalculator:
+“”“Calculates network-wide synchronization metrics.”””
 
 ```
-def __init__(self):
-    self._stats = {spec.name.lower(): 0 for spec in Specialization}
-    self._movement_count = 0
-    self._success_count = 0
-    self._failure_count = 0
+SYNC_THRESHOLD = 0.75
+DISRUPTION_THRESHOLD = 0.3
+TRANSCENDENCE_THRESHOLD = 0.95
 
-@property
-def stats(self) -> Dict[str, int]:
-    """Get immutable copy of current statistics."""
-    return self._stats.copy()
-
-@property
-def movement_count(self) -> int:
-    return self._movement_count
-
-@property
-def success_rate(self) -> float:
-    """Calculate success rate as percentage."""
-    if self._movement_count == 0:
+@classmethod
+def calculate_network_coherence(cls, islands: Dict[str, IslandState]) -> float:
+    """Calculate overall network coherence based on island connectivity."""
+    if not islands:
         return 0.0
-    return (self._success_count / self._movement_count) * 100
-
-def record_movement(self, specialization: Specialization, success: bool) -> None:
-    """Record a movement with its outcome."""
-    stat_key = specialization.name.lower()
-    self._stats[stat_key] += 1
-    self._movement_count += 1
     
-    if success:
-        self._success_count += 1
-    else:
-        self._failure_count += 1
-
-def reset(self) -> None:
-    """Reset all statistics."""
-    self._stats = {spec.name.lower(): 0 for spec in Specialization}
-    self._movement_count = 0
-    self._success_count = 0
-    self._failure_count = 0
-```
-
-class PathCalculator(ABC):
-“”“Abstract base class for calculating movement paths.”””
-
-```
-@abstractmethod
-def calculate_paths(self, current: str, target: str, 
-                   specialization: Specialization) -> List[str]:
-    """Calculate available paths between locations."""
-    pass
-```
-
-class BasicPathCalculator(PathCalculator):
-“”“Basic implementation of path calculation.”””
-
-```
-BASE_PATHS = ["Direct Path", "Alternate Path"]
-
-SPECIALIZATION_PATHS = {
-    Specialization.TERRITORIAL: ["Siege Path"],
-    Specialization.ECONOMIC: ["Trade Route"],
-    Specialization.SOCIAL: ["Diplomatic Path"],
-    Specialization.TECHNOLOGICAL: ["Neural Network Path"]
-}
-
-def calculate_paths(self, current: str, target: str, 
-                   specialization: Specialization) -> List[str]:
-    """Calculate available movement paths."""
-    paths = self.BASE_PATHS.copy()
+    total_connectivity = sum(island.network_connectivity for island in islands.values())
+    avg_connectivity = total_connectivity / len(islands)
     
-    # Add specialization-specific paths
-    spec_paths = self.SPECIALIZATION_PATHS.get(specialization, [])
-    paths.extend(spec_paths)
+    # Factor in cultural resonance alignment
+    cultural_alignment = cls._calculate_cultural_alignment(islands)
     
-    return paths
+    return (avg_connectivity + cultural_alignment) / 2.0
+
+@classmethod
+def _calculate_cultural_alignment(cls, islands: Dict[str, IslandState]) -> float:
+    """Calculate cultural alignment across the network."""
+    if len(islands) < 2:
+        return 1.0
+    
+    # Simplified: measure variance in cultural resonance patterns
+    all_resonances = []
+    for island in islands.values():
+        if island.cultural_resonance:
+            avg_resonance = sum(island.cultural_resonance.values()) / len(island.cultural_resonance)
+            all_resonances.append(avg_resonance)
+    
+    if not all_resonances:
+        return 0.5
+    
+    # Lower variance = higher alignment
+    mean_resonance = sum(all_resonances) / len(all_resonances)
+    variance = sum((x - mean_resonance) ** 2 for x in all_resonances) / len(all_resonances)
+    
+    # Convert variance to alignment score (inverse relationship)
+    alignment = max(0.0, 1.0 - variance)
+    return alignment
 ```
 
-class PrimeMovementController:
+class NusantaraMovementController:
 “””
-Enhanced movement controller with improved architecture and separation of concerns.
+Maritime archipelagic movement controller based on Nusantara principles.
 
 ```
-This refactored version provides:
-- Better error handling and validation
-- Immutable result objects
-- Separated concerns (state management, statistics, performance)
-- Enhanced logging and debugging capabilities
-- More flexible path calculation system
+Unlike linear terrestrial movement, this system operates on:
+- Monsoon-dependent navigation cycles
+- Inter-island network effects
+- Cultural and economic synchronization
+- Distributed autonomous island nodes
 """
 
-def __init__(self, specialization: Specialization, 
-             path_calculator: Optional[PathCalculator] = None,
-             logger: Optional[logging.Logger] = None):
-    """Initialize controller with enhanced dependency injection."""
-    self.specialization = specialization
+def __init__(self, island_network: Dict[str, IslandSpecialization]):
+    """Initialize with a network of islands and their specializations."""
+    self.islands = {
+        name: IslandState(
+            name=name,
+            specialization=spec,
+            autonomy_level=0.8,  # Start with high autonomy
+            network_connectivity=0.4,  # Start partially connected
+            cultural_resonance={"shared_heritage": 0.6, "trade_language": 0.5}
+        )
+        for name, spec in island_network.items()
+    }
     
-    # Composition over inheritance - separate concerns
-    self._state_manager = StateManager()
-    self._stats_tracker = StatisticsTracker()
-    self._performance_calc = PerformanceCalculator()
-    self._path_calculator = path_calculator or BasicPathCalculator()
-    self._logger = logger or logging.getLogger(__name__)
+    self.monsoon_calc = MonsoonCalculator()
+    self.sync_calc = NetworkSyncCalculator()
+    self.network_state = NetworkState.FRAGMENTED
     
-    # Core metrics
-    self._engine_performance = 0
-    self._anomalies = 0
-    self._world_state: Dict = {}
+    # Network-wide metrics
+    self._total_voyages = 0
+    self._successful_voyages = 0
+    self._cultural_exchanges = 0
+    self._innovation_transfers = 0
+    self._disruption_events = 0
+    
+    # Route history for pattern learning
+    self._route_history: List[Tuple[str, str, bool]] = []
 
 @property
-def state(self) -> MovementState:
-    """Get current movement state."""
-    return self._state_manager.current_state
+def current_monsoon(self) -> MonsoonPhase:
+    """Get current monsoon phase."""
+    return self.monsoon_calc.current_phase
 
 @property
-def stats(self) -> Dict[str, int]:
-    """Get current statistics."""
-    return self._stats_tracker.stats
+def network_coherence(self) -> float:
+    """Calculate current network coherence."""
+    return self.sync_calc.calculate_network_coherence(self.islands)
 
 @property
-def engine_performance(self) -> int:
-    """Get current engine performance."""
-    return self._engine_performance
+def voyage_success_rate(self) -> float:
+    """Calculate success rate of inter-island voyages."""
+    if self._total_voyages == 0:
+        return 0.0
+    return self._successful_voyages / self._total_voyages
 
-@property
-def anomalies(self) -> int:
-    """Get current anomaly count."""
-    return self._anomalies
-
-@property
-def success_rate(self) -> float:
-    """Get movement success rate."""
-    return self._stats_tracker.success_rate
-
-@property
-def world_state(self) -> Dict:
-    """Get immutable copy of world state."""
-    return self._world_state.copy()
-
-def execute_movement(self, direction: str, logic_status: str) -> MovementResult:
+def navigate_between_islands(self, origin: str, destination: str, 
+                            intent: str = "trade") -> NavigationResult:
     """
-    Execute a movement with enhanced error handling and validation.
+    Attempt navigation between two islands in the network.
     
     Args:
-        direction: Cardinal direction of movement
-        logic_status: Status of the movement logic ("success" or "failed")
-        
-    Returns:
-        MovementResult object with comprehensive outcome details
-        
-    Raises:
-        ValueError: If invalid parameters are provided
-        StateTransitionError: If invalid state transition is attempted
+        origin: Starting island name
+        destination: Target island name  
+        intent: Purpose of voyage (trade, cultural, knowledge, diplomatic)
     """
-    if not direction or not isinstance(direction, str):
-        raise ValueError("Direction must be a non-empty string")
+    if origin not in self.islands or destination not in self.islands:
+        raise ValueError(f"Unknown islands: {origin} or {destination}")
     
-    if logic_status not in ["success", "failed"]:
-        raise ValueError("Logic status must be 'success' or 'failed'")
+    self._total_voyages += 1
     
-    self._logger.debug(f"Executing movement: {direction} with status: {logic_status}")
+    # Check monsoon favorability
+    is_favorable, monsoon_factor = self.monsoon_calc.is_navigation_favorable(origin, destination)
     
-    # Record movement statistics
-    is_success = logic_status == "success"
-    self._stats_tracker.record_movement(self.specialization, is_success)
+    # Calculate base success probability
+    origin_island = self.islands[origin]
+    dest_island = self.islands[destination]
     
-    # Update performance (always increases regardless of success/failure)
-    performance_gain = self._performance_calc.get_performance_increment(self.specialization)
-    self._engine_performance += performance_gain
+    base_success = (origin_island.network_connectivity + dest_island.network_connectivity) / 2.0
+    monsoon_bonus = 0.3 if is_favorable else -0.2
     
-    # Handle logic failures and anomalies
-    if logic_status == "failed":
-        self._anomalies += 1
-        self._logger.warning(f"Movement failed. Anomaly count: {self._anomalies}")
+    # Specialization synergy bonus
+    synergy_bonus = self._calculate_specialization_synergy(origin_island, dest_island)
     
-    # Evaluate state transitions
-    self._evaluate_state_transitions()
+    final_success_prob = min(0.95, max(0.05, base_success + monsoon_bonus + synergy_bonus))
     
-    # Create narrative events
-    narrative_events = [f"Moved in direction: {direction}"]
-    if logic_status == "failed":
-        narrative_events.append(f"Movement encountered failure (anomaly #{self._anomalies})")
+    # Determine success
+    navigation_success = random.random() < final_success_prob
     
-    if self.state == MovementState.SYNCHRONIZED:
-        narrative_events.append("SYNCHRONIZED state achieved!")
-    elif self.state == MovementState.ANOMALOUS:
-        narrative_events.append("System entered ANOMALOUS state")
+    if navigation_success:
+        self._successful_voyages += 1
+        result = self._execute_successful_voyage(origin_island, dest_island, intent)
+    else:
+        result = self._handle_navigation_failure(origin, destination)
     
-    return MovementResult(
-        success=is_success,
-        stat_changes=self.stats,
-        performance_impact=self._engine_performance,
-        world_modifications=[],  # Could be enhanced based on requirements
-        narrative_events=narrative_events
+    # Update network state based on voyage patterns
+    self._update_network_state()
+    
+    # Advance monsoon cycle
+    self.monsoon_calc.advance_cycle()
+    
+    return result
+
+def _calculate_specialization_synergy(self, origin: IslandState, dest: IslandState) -> float:
+    """Calculate synergy bonus based on island specializations."""
+    synergies = {
+        (IslandSpecialization.MARITIME_HUB, IslandSpecialization.SPICE_PRODUCER): 0.2,
+        (IslandSpecialization.TECH_ENTREPOT, IslandSpecialization.CULTURAL_NODE): 0.25,
+        (IslandSpecialization.CULTURAL_NODE, IslandSpecialization.SPICE_PRODUCER): 0.15,
+        (IslandSpecialization.MARITIME_HUB, IslandSpecialization.TECH_ENTREPOT): 0.3,
+    }
+    
+    pair = (origin.specialization, dest.specialization)
+    reverse_pair = (dest.specialization, origin.specialization)
+    
+    return synergies.get(pair, synergies.get(reverse_pair, 0.0))
+
+def _execute_successful_voyage(self, origin: IslandState, dest: IslandState, 
+                              intent: str) -> NavigationResult:
+    """Execute a successful voyage with appropriate effects."""
+    self._cultural_exchanges += 1
+    
+    # Update island connectivity
+    connectivity_boost = 0.1
+    self.islands[origin.name] = self._update_island_connectivity(origin, connectivity_boost)
+    self.islands[dest.name] = self._update_island_connectivity(dest, connectivity_boost)
+    
+    # Generate cultural exchange
+    cultural_exchange = {
+        "navigation_knowledge": random.randint(1, 5),
+        "trade_practices": random.randint(1, 3),
+        "cultural_artifacts": random.randint(0, 2)
+    }
+    
+    # Knowledge transfer based on specializations
+    knowledge_transferred = self._generate_knowledge_transfer(origin, dest)
+    
+    network_effects = [
+        f"Strengthened {origin.name}-{dest.name} trade route",
+        f"Enhanced cultural resonance between islands"
+    ]
+    
+    return NavigationResult(
+        success=True,
+        origin_island=origin.name,
+        destination_island=dest.name,
+        route_taken=f"{origin.name} → {dest.name} via monsoon currents",
+        monsoon_favorable=True,  # Must be true for successful voyage
+        cultural_exchange=cultural_exchange,
+        trade_volume=random.randint(50, 200),
+        knowledge_transferred=knowledge_transferred,
+        network_effects=network_effects
     )
 
-def _evaluate_state_transitions(self) -> None:
-    """Evaluate and execute state transitions based on current metrics."""
-    # Check for anomalous state first (higher priority)
-    if self._performance_calc.should_transition_to_anomalous(self._anomalies):
-        try:
-            self._state_manager.transition_to(MovementState.ANOMALOUS)
-            self._logger.info(f"Transitioned to ANOMALOUS state (anomalies: {self._anomalies})")
-        except StateTransitionError as e:
-            self._logger.warning(f"Failed to transition to ANOMALOUS: {e}")
+def _handle_navigation_failure(self, origin: str, destination: str) -> NavigationResult:
+    """Handle failed navigation attempt."""
+    self._disruption_events += 1
     
-    # Check for synchronized state (only if not anomalous)
-    elif self._performance_calc.should_transition_to_synchronized(self._engine_performance):
-        try:
-            self._state_manager.transition_to(MovementState.SYNCHRONIZED)
-            self._logger.info(f"Transitioned to SYNCHRONIZED state (performance: {self._engine_performance})")
-        except StateTransitionError as e:
-            self._logger.warning(f"Failed to transition to SYNCHRONIZED: {e}")
+    # Reduce connectivity slightly on failure
+    if origin in self.islands:
+        origin_island = self.islands[origin]
+        self.islands[origin] = self._update_island_connectivity(origin_island, -0.05)
+    
+    return NavigationResult(
+        success=False,
+        origin_island=origin,
+        destination_island=destination,
+        route_taken="Navigation failed",
+        monsoon_favorable=False,
+        network_effects=[f"Route disruption between {origin} and {destination}"]
+    )
 
-def calculate_available_movements(self, current: str, target: str) -> MovementOptions:
-    """
-    Calculate available movement paths using pluggable path calculator.
+def _update_island_connectivity(self, island: IslandState, change: float) -> IslandState:
+    """Create updated island state with modified connectivity."""
+    new_connectivity = max(0.0, min(1.0, island.network_connectivity + change))
     
-    Args:
-        current: Current location identifier
-        target: Target location identifier
-        
-    Returns:
-        MovementOptions object with available paths
-    """
-    if not current or not target:
-        raise ValueError("Current and target locations must be provided")
-    
-    paths = self._path_calculator.calculate_paths(current, target, self.specialization)
-    
-    self._logger.debug(f"Calculated {len(paths)} available paths from {current} to {target}")
-    
-    return MovementOptions(paths=paths)
+    return IslandState(
+        name=island.name,
+        specialization=island.specialization,
+        autonomy_level=island.autonomy_level,
+        network_connectivity=new_connectivity,
+        cultural_resonance=island.cultural_resonance,
+        resource_capacity=island.resource_capacity,
+        innovation_index=island.innovation_index
+    )
 
-def reset(self) -> None:
-    """Reset the controller to initial state."""
-    self._logger.info("Resetting controller to initial state")
+def _generate_knowledge_transfer(self, origin: IslandState, dest: IslandState) -> List[str]:
+    """Generate knowledge transfer based on specializations."""
+    transfer_patterns = {
+        IslandSpecialization.MARITIME_HUB: ["navigation_techniques", "port_management", "weather_prediction"],
+        IslandSpecialization.SPICE_PRODUCER: ["agricultural_methods", "preservation_techniques", "trade_goods"],
+        IslandSpecialization.CULTURAL_NODE: ["religious_practices", "artistic_techniques", "philosophical_concepts"],
+        IslandSpecialization.TECH_ENTREPOT: ["manufacturing_processes", "technological_innovations", "trade_networks"]
+    }
     
-    self._state_manager.reset()
-    self._stats_tracker.reset()
-    self._engine_performance = 0
-    self._anomalies = 0
-    self._world_state.clear()
+    origin_knowledge = transfer_patterns.get(origin.specialization, [])
+    dest_knowledge = transfer_patterns.get(dest.specialization, [])
+    
+    # Random selection of 1-3 knowledge items
+    all_knowledge = origin_knowledge + dest_knowledge
+    num_transfers = random.randint(1, min(3, len(all_knowledge)))
+    
+    return random.sample(all_knowledge, num_transfers) if all_knowledge else []
 
-def get_diagnostic_info(self) -> Dict:
-    """Get comprehensive diagnostic information."""
+def _update_network_state(self) -> None:
+    """Update network state based on current coherence."""
+    coherence = self.network_coherence
+    
+    if coherence >= self.sync_calc.TRANSCENDENCE_THRESHOLD:
+        self.network_state = NetworkState.TRANSCENDENT
+    elif coherence >= self.sync_calc.SYNC_THRESHOLD:
+        self.network_state = NetworkState.SYNCHRONIZED
+    elif coherence <= self.sync_calc.DISRUPTION_THRESHOLD:
+        self.network_state = NetworkState.DISRUPTED
+    elif self._total_voyages > 0 and self.voyage_success_rate > 0.5:
+        self.network_state = NetworkState.CONNECTING
+    else:
+        self.network_state = NetworkState.FRAGMENTED
+
+def get_network_status(self) -> Dict:
+    """Get comprehensive network status."""
     return {
-        'current_state': self.state.name,
-        'state_history': [s.name for s in self._state_manager.state_history],
-        'specialization': self.specialization.name,
-        'engine_performance': self._engine_performance,
-        'anomalies': self._anomalies,
-        'success_rate': self.success_rate,
-        'movement_count': self._stats_tracker.movement_count,
-        'stats': self.stats,
-        'thresholds': {
-            'anomaly_threshold': self._performance_calc.ANOMALY_THRESHOLD,
-            'sync_threshold': self._performance_calc.SYNCHRONIZATION_THRESHOLD
+        "network_state": self.network_state.name,
+        "network_coherence": round(self.network_coherence, 3),
+        "monsoon_phase": self.current_monsoon.value,
+        "total_voyages": self._total_voyages,
+        "success_rate": round(self.voyage_success_rate, 3),
+        "cultural_exchanges": self._cultural_exchanges,
+        "disruption_events": self._disruption_events,
+        "island_count": len(self.islands),
+        "islands": {
+            name: {
+                "specialization": island.specialization.value,
+                "connectivity": round(island.network_connectivity, 3),
+                "autonomy": round(island.autonomy_level, 3)
+            }
+            for name, island in self.islands.items()
         }
     }
-```
 
-class MovementSimulator:
-“”“Enhanced simulator with better reporting and analysis capabilities.”””
-
-```
-def __init__(self, controller: PrimeMovementController):
-    """Initialize with a movement controller."""
-    if not isinstance(controller, PrimeMovementController):
-        raise TypeError("Controller must be instance of PrimeMovementController")
-    
-    self.controller = controller
-    self.history: List[Dict] = []
-    self._logger = logging.getLogger(__name__)
-
-def run_simulation(self, steps: List[Tuple[str, str]]) -> List[Dict]:
-    """
-    Run simulation with enhanced error handling and reporting.
-    
-    Args:
-        steps: List of (direction, logic_status) tuples
-        
-    Returns:
-        List of comprehensive result dictionaries for each step
-    """
-    if not steps:
-        raise ValueError("Steps list cannot be empty")
-    
-    self._logger.info(f"Starting simulation with {len(steps)} steps")
+def simulate_monsoon_cycle(self, cycles: int = 2) -> List[Dict]:
+    """Simulate multiple monsoon cycles with random inter-island movements."""
     results = []
     
-    for step_num, (direction, logic_status) in enumerate(steps, 1):
-        try:
-            # Execute movement
-            result = self.controller.execute_movement(direction, logic_status)
-            
-            # Get available paths
-            paths = self.controller.calculate_available_movements("Start", "End")
-            
-            # Create comprehensive record
-            record = {
-                'step': step_num,
-                'direction': direction,
-                'logic_status': logic_status,
-                'specialization': self.controller.specialization.name,
-                'stats': self.controller.stats,
-                'engine_performance': self.controller.engine_performance,
-                'anomalies': self.controller.anomalies,
-                'movement_state': self.controller.state.name,
-                'success_rate': round(self.controller.success_rate, 2),
-                'available_paths': paths.paths,
-                'narrative_events': result.narrative_events,
-                'result_success': result.success
-            }
-            
-            results.append(record)
-            self.history.append(record)
-            
-            self._logger.debug(f"Step {step_num} completed: {self.controller.state.name}")
-            
-        except Exception as e:
-            self._logger.error(f"Error in step {step_num}: {e}")
-            raise
+    island_names = list(self.islands.keys())
     
-    self._logger.info(f"Simulation completed. Final state: {self.controller.state.name}")
+    for cycle in range(cycles):
+        cycle_results = []
+        
+        # Generate random voyages during this cycle
+        voyages_per_cycle = random.randint(5, 15)
+        
+        for _ in range(voyages_per_cycle):
+            origin, destination = random.sample(island_names, 2)
+            intent = random.choice(["trade", "cultural", "knowledge", "diplomatic"])
+            
+            result = self.navigate_between_islands(origin, destination, intent)
+            cycle_results.append(result)
+        
+        # Record cycle summary
+        cycle_summary = {
+            "cycle": cycle + 1,
+            "monsoon_phase": self.current_monsoon.value,
+            "voyages": len(cycle_results),
+            "successful_voyages": sum(1 for r in cycle_results if r.success),
+            "network_coherence": self.network_coherence,
+            "network_state": self.network_state.name
+        }
+        
+        results.append(cycle_summary)
+    
     return results
-
-def get_analysis(self) -> Dict:
-    """Generate comprehensive analysis of simulation results."""
-    if not self.history:
-        return {"error": "No simulation data available"}
-    
-    final_record = self.history[-1]
-    
-    return {
-        'summary': {
-            'total_steps': len(self.history),
-            'final_state': final_record['movement_state'],
-            'final_performance': final_record['engine_performance'],
-            'final_anomalies': final_record['anomalies'],
-            'success_rate': final_record['success_rate']
-        },
-        'performance_trajectory': [r['engine_performance'] for r in self.history],
-        'state_transitions': [r['movement_state'] for r in self.history],
-        'controller_diagnostics': self.controller.get_diagnostic_info()
-    }
 ```
 
-# Example usage and demonstration
+# Example usage demonstrating the Nusantara system
 
 if **name** == “**main**”:
-# Configure logging
-logging.basicConfig(level=logging.INFO,
-format=’%(asctime)s - %(name)s - %(levelname)s - %(message)s’)
+# Create archipelagic network
+nusantara_network = {
+“java”: IslandSpecialization.CULTURAL_NODE,
+“sumatra”: IslandSpecialization.SPICE_PRODUCER,
+“borneo”: IslandSpecialization.MARITIME_HUB,
+“sulawesi”: IslandSpecialization.TECH_ENTREPOT,
+“mindanao”: IslandSpecialization.SPICE_PRODUCER,
+“visayas”: IslandSpecialization.MARITIME_HUB,
+“singapore”: IslandSpecialization.TECH_ENTREPOT
+}
 
 ```
-# Create a controller with Technological specialization
-controller = PrimeMovementController(Specialization.TECHNOLOGICAL)
+# Initialize controller
+controller = NusantaraMovementController(nusantara_network)
 
-# Create a simulator
-simulator = MovementSimulator(controller)
+print("=== Nusantara Maritime Network Initialized ===")
+print(f"Network State: {controller.network_state.name}")
+print(f"Current Monsoon: {controller.current_monsoon.value}")
+print(f"Network Coherence: {controller.network_coherence:.3f}")
+print()
 
-# Define movement sequence
-movements = [
-    ("East", "success"),
-    ("South", "failed"),
-    ("North", "failed"),
-    ("West", "success"),
-    ("North", "success")
+# Execute some navigation attempts
+test_voyages = [
+    ("java", "sumatra", "trade"),
+    ("singapore", "borneo", "knowledge"),
+    ("mindanao", "visayas", "cultural"),
+    ("sulawesi", "java", "diplomatic")
 ]
 
-# Run simulation
-try:
-    results = simulator.run_simulation(movements)
-    
-    # Print results
-    for result in results:
-        print(f"Step {result['step']}: {result['direction']} "
-              f"({result['logic_status']}) -> "
-              f"Performance: {result['engine_performance']}, "
-              f"State: {result['movement_state']}, "
-              f"Success Rate: {result['success_rate']}%")
-    
-    # Print analysis
-    analysis = simulator.get_analysis()
-    print(f"\nFinal Analysis:")
-    print(f"Total Steps: {analysis['summary']['total_steps']}")
-    print(f"Final State: {analysis['summary']['final_state']}")
-    print(f"Final Performance: {analysis['summary']['final_performance']}")
-    print(f"Success Rate: {analysis['summary']['success_rate']}%")
-    
-except Exception as e:
-    print(f"Simulation failed: {e}")
+print("=== Navigation Results ===")
+for origin, dest, intent in test_voyages:
+    result = controller.navigate_between_islands(origin, dest, intent)
+    status = "SUCCESS" if result.success else "FAILED"
+    print(f"{origin} → {dest} ({intent}): {status}")
+    if result.success:
+        print(f"  Trade Volume: {result.trade_volume}")
+        print(f"  Knowledge: {', '.join(result.knowledge_transferred[:2])}")
+    print()
+
+# Run monsoon cycle simulation
+print("=== Monsoon Cycle Simulation ===")
+cycle_results = controller.simulate_monsoon_cycle(cycles=2)
+
+for cycle_data in cycle_results:
+    print(f"Cycle {cycle_data['cycle']} ({cycle_data['monsoon_phase']}):")
+    print(f"  Voyages: {cycle_data['voyages']} (Success: {cycle_data['successful_voyages']})")
+    print(f"  Network State: {cycle_data['network_state']}")
+    print(f"  Coherence: {cycle_data['network_coherence']:.3f}")
+    print()
+
+# Final status
+print("=== Final Network Status ===")
+status = controller.get_network_status()
+print(f"Network State: {status['network_state']}")
+print(f"Total Voyages: {status['total_voyages']}")
+print(f"Success Rate: {status['success_rate']:.1%}")
+print(f"Cultural Exchanges: {status['cultural_exchanges']}")
+print(f"Final Coherence: {status['network_coherence']:.3f}")
 ```
