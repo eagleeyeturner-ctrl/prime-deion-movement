@@ -626,4 +626,22 @@ return (
                 <div className="p-3 bg-gray-700 rounded">
                   <strong>Current Scenario:</strong> {scenarios[tournamentConfig.scenario].name}
                   <br />
+                  <span className="text-gray-300">{scenarios[tournamentConfig.scenario].description}</span>
+                </div>
+                <div className="mt-3 p-3 bg-gray-700 rounded">
+                  <strong>Insight:</strong> Based on the selected scenario, certain strategies gain advantages.
+                  Adjust archetype bonuses accordingly for better balance.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+</div>
+);
+};
+
+export default TournamentBracketGenerator;
 ```
