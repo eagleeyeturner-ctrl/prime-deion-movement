@@ -1,5 +1,3 @@
-Code
-
 import random
 import time
 
